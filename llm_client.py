@@ -55,8 +55,8 @@ class LLMClient:
             payload = {
                 "model": self.model,
                 "messages": messages,
-                "temperature": 0.0,
-                "max_tokens": 300,
+                "temperature": 0.2,
+                "max_tokens": 1000,
                 "top_p": 0.1
             }
             
@@ -105,6 +105,7 @@ class LLMClient:
             
             # Parse JSON
             result = json.loads(content)
+            print(f"✅ Parsed response: {result}")
             
             # Ensure all fields exist
             return {
@@ -115,7 +116,7 @@ class LLMClient:
                 "search_strategy": result.get("search_strategy")
             }
         except Exception as e:
-            print(f"❌ Error parsing response: {e}")
+            print(f"❌ Error parsing response {content}: {e}")
             return self._get_default()
     
     def _get_default(self) -> Dict:

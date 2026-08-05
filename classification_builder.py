@@ -59,7 +59,13 @@ def build_system_prompt_with_examples(grouped_examples: Dict) -> str:
     """
     Build the system prompt with grouped examples.
     """
-    # Convert grouped examples to a readable string
+    
+    # ─── 1. Get all unique intents ───
+    intents = list(grouped_examples.keys())
+    intents_str = ", ".join(intents)
+    print(f"Intents found: {intents_str}")
+    
+    # ─── 2. Build examples text ───
     examples_text = ""
     
     for intent, spec_categories in grouped_examples.items():
@@ -82,6 +88,52 @@ def build_system_prompt_with_examples(grouped_examples: Dict) -> str:
                 if search_strategy:
                     examples_text += f"    Search Strategy: {search_strategy}\n"
     
+    # ─── 3. Get all unique spec categories ───
+    all_spec_categories = set()
+    for intent, spec_categories in grouped_examples.items():
+        for spec_category in spec_categories.keys():
+            all_spec_categories.add(spec_category)
+    spec_categories_str = ", ".join(sorted(all_spec_categories))
+    
+    # ─── 4. Get all unique routes ───
+    all_routes = set()
+    for intent, spec_categories in grouped_examples.items():
+        for spec_category, examples in spec_categories.items():
+            for example in examples:
+                route = example.get("route", "")
+                if route:
+                    all_routes.add(route)
+    routes_str = ", ".join(sorted(all_routes))
+    
+    # ─── 5. Get all unique ES indexes ───
+    all_es_indexes = set()
+    for intent, spec_categories in grouped_examples.items():
+        for spec_category, examples in spec_categories.items():
+            for example in examples:
+                es_index = example.get("es_index")
+                # ✅ FIX: Only add if it's a string
+                if es_index and isinstance(es_index, str):
+                    all_es_indexes.add(es_index)
+    es_indexes_str = ", ".join(sorted(all_es_indexes))
+    
+    # ─── 6. Get all unique search strategies ───
+    all_search_strategies = set()
+    for intent, spec_categories in grouped_examples.items():
+        for spec_category, examples in spec_categories.items():
+            for example in examples:
+                search_strategy = example.get("search_strategy")
+                # ✅ FIX: Only add if it's a string
+                if search_strategy and isinstance(search_strategy, str):
+                    all_search_strategies.add(search_strategy)
+    search_strategies_str = ", ".join(sorted(all_search_strategies))
+
+    print(f"Spec Categories found: {spec_categories_str}")
+    print(f"Routes found: {routes_str}")
+    print(f"ES Indexes found: {es_indexes_str}")
+    print(f"Search Strategies found: {search_strategies_str}")
+    
+    
+    # ─── 7. Build the system prompt ───
     system_prompt = f"""
 You are a query classifier for a document management system.
 
@@ -93,14 +145,16 @@ Here are the classification rules and examples:
 
 When a user asks a query, return ONLY a JSON object with these fields:
 {{
-  "intent": "search or rag_content or conversation or action",
-  "spec_category": "File Retrieval or Pay Slip or Contracts or etc.",
-  "route": "Elasticsearch search or RAG content analysis or etc.",
-  "es_index": "document or master or masterrecord or doctype or folder or null",
-  "search_strategy": "BFS or DFS or BFS->DFS or null"
+  "intent": "{intents_str}",
+  "spec_category": "{spec_categories_str}",
+  "route": "{routes_str}",
+  "es_index": "{es_indexes_str} or null",
+  "search_strategy": "{search_strategies_str} or null",
+  "confidence": 0.5
 }}
 
-Do not add any extra text. Return ONLY the JSON.
+Do not add any extra text. Return ONLY the JSON object. If you are unsure, return an empty json. 
+NEVER respond with text outside the JSON object. If a field is not applicable, return null for that field.
 """
     
     return system_prompt

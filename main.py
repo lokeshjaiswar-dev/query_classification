@@ -44,6 +44,7 @@ def initialize_classifier():
     
     # Step 2: Build the system prompt with examples
     system_prompt = build_system_prompt_with_examples(grouped_examples)
+    # print("prompt :", system_prompt)
     print("✅ System prompt built")
     
     # Step 3: Create LLM client and set system prompt
@@ -124,7 +125,7 @@ def main():
             
             # Print both formats
             print_result(result)
-            print_json(result)
+            # print_json(result)
             
         except Exception as e:
             print(f"❌ Error: {e}")
