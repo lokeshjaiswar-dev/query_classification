@@ -1,5 +1,5 @@
 # ============================================
-# FILE: llm_client.py
+# FILE: llm_client.py (FIXED)
 # PURPOSE: LLM Client with Context
 # ============================================
 
@@ -81,10 +81,23 @@ class LLMClient:
             
             # ─── Parse response ───
             data = response.json()
+            
+            # Check if 'choices' exists
+            if "choices" not in data or len(data["choices"]) == 0:
+                print("❌ No choices in response")
+                print(f"Response data: {data}")
+                return self._get_default()
+            
             content = data["choices"][0]["message"]["content"]
             
             return self._parse_response(content)
             
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON decode error: {e}")
+            return self._get_default()
+        except KeyError as e:
+            print(f"❌ Missing key in response: {e}")
+            return self._get_default()
         except Exception as e:
             print(f"❌ Error calling LLM: {e}")
             return self._get_default()
@@ -115,8 +128,12 @@ class LLMClient:
                 "es_index": result.get("es_index"),
                 "search_strategy": result.get("search_strategy")
             }
+        except json.JSONDecodeError as e:
+            print(f"❌ Error parsing JSON: {e}")
+            print(f"Content: {content}")
+            return self._get_default()
         except Exception as e:
-            print(f"❌ Error parsing response {content}: {e}")
+            print(f"❌ Error parsing response: {e}")
             return self._get_default()
     
     def _get_default(self) -> Dict:

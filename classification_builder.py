@@ -35,7 +35,7 @@ def build_grouped_examples(
         
         # Build the example object
         example = {
-            "query": row["Query"],
+            # "query": row["Query"],
             "route": row["Route / Handler"],
             "es_index": row.get("ES Index (if search)", ""),
             "search_strategy": row.get("Search Strategy", "")
@@ -75,12 +75,12 @@ def build_system_prompt_with_examples(grouped_examples: Dict) -> str:
             examples_text += f"\n### {spec_category}\n"
             
             for example in examples:
-                query = example.get("query", "")
+                # query = example.get("query", "")
                 route = example.get("route", "")
                 es_index = example.get("es_index")
                 search_strategy = example.get("search_strategy")
                 
-                examples_text += f'  - Query: "{query}"\n'
+                # examples_text += f'  - Query: "{query}"\n'
                 examples_text += f"    Route: {route}\n"
                 
                 if es_index:
@@ -149,8 +149,7 @@ When a user asks a query, return ONLY a JSON object with these fields:
   "spec_category": "{spec_categories_str}",
   "route": "{routes_str}",
   "es_index": "{es_indexes_str} or null",
-  "search_strategy": "{search_strategies_str} or null",
-  "confidence": 0.5
+  "search_strategy": "{search_strategies_str} or null"
 }}
 
 Do not add any extra text. Return ONLY the JSON object. If you are unsure, return an empty json. 

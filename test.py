@@ -1,6 +1,10 @@
-import request
+import pandas as pd
+from collections import defaultdict
 
-data = request.get("https://jsonplaceholder.typicode.com/todos")
+df = pd.read_csv("./query_classifications.csv")
 
-print(data)
-print(data.json())
+print(df)
+print(df.head())
+
+
+
