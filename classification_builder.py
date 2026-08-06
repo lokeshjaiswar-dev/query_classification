@@ -1,44 +1,41 @@
-# ============================================
-# FILE: classification_builder.py
-# PURPOSE: Build classification context from CSV
-# ============================================
-
 import pandas as pd
 from collections import defaultdict
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 
 def build_grouped_examples(
     csv_path: str,
     max_examples_per_category: int = 3
-) -> Dict[str, Any]:
+) -> Dict[str, Dict[str, list]]:
     """
-    Build grouped examples from CSV.
-    
-    Args:
-        csv_path: Path to the CSV file
-        max_examples_per_category: Max examples per spec category
-    
-    Returns:
-        Grouped dictionary with all fields
+    Build grouped examples with structure:
+    {
+        "intent_name": {
+            "spec_category_name": [
+                {
+                    "route": "route name",
+                    "es_index": "index name or None",
+                    "search_strategy": "strategy or None"
+                }
+            ]
+        }
+    }
     """
-    # Step 1: Load CSV
+    # ─── Load CSV ───
     df = pd.read_csv(csv_path)
     
-    # Step 2: Create nested dictionary
+    # ─── Create nested structure ───
     grouped = defaultdict(lambda: defaultdict(list))
     
-    # Step 3: Loop through each row
+    # ─── Populate with examples ───
     for _, row in df.iterrows():
         intent = row["Intent (intent_analysis)"]
         spec_category = row["Spec Category"]
         
-        # Build the example object
         example = {
-            # "query": row["Query"],
             "route": row["Route / Handler"],
-            "es_index": row.get("ES Index (if search)", ""),
-            "search_strategy": row.get("Search Strategy", "")
+            "es_index": row.get("ES Index (if search)", None),
+            "search_strategy": row.get("Search Strategy", None)
         }
         
         # Clean up empty values
@@ -51,110 +48,101 @@ def build_grouped_examples(
         if len(grouped[intent][spec_category]) < max_examples_per_category:
             grouped[intent][spec_category].append(example)
     
-    # Convert defaultdict to regular dict
+    # Convert to regular dict
     return {k: dict(v) for k, v in grouped.items()}
 
 
-def build_system_prompt_with_examples(grouped_examples: Dict) -> str:
+def build_classification_prompt(grouped_examples: Dict) -> str:
     """
-    Build the system prompt with grouped examples.
+    Build the classification prompt with nested structure:
+    intent_name: {
+        spec_category_name: {
+            examples
+        }
+    }
     """
-    
-    # ─── 1. Get all unique intents ───
-    intents = list(grouped_examples.keys())
-    intents_str = ", ".join(intents)
-    print(f"Intents found: {intents_str}")
-    
-    # ─── 2. Build examples text ───
-    examples_text = ""
-    
-    for intent, spec_categories in grouped_examples.items():
-        examples_text += f"\n## INTENT: {intent.upper()}\n"
-        
-        for spec_category, examples in spec_categories.items():
-            examples_text += f"\n### {spec_category}\n"
-            
-            for example in examples:
-                # query = example.get("query", "")
-                route = example.get("route", "")
-                es_index = example.get("es_index")
-                search_strategy = example.get("search_strategy")
-                
-                # examples_text += f'  - Query: "{query}"\n'
-                examples_text += f"    Route: {route}\n"
-                
-                if es_index:
-                    examples_text += f"    ES Index: {es_index}\n"
-                if search_strategy:
-                    examples_text += f"    Search Strategy: {search_strategy}\n"
-    
-    # ─── 3. Get all unique spec categories ───
-    all_spec_categories = set()
-    for intent, spec_categories in grouped_examples.items():
-        for spec_category in spec_categories.keys():
-            all_spec_categories.add(spec_category)
-    spec_categories_str = ", ".join(sorted(all_spec_categories))
-    
-    # ─── 4. Get all unique routes ───
-    all_routes = set()
-    for intent, spec_categories in grouped_examples.items():
-        for spec_category, examples in spec_categories.items():
-            for example in examples:
-                route = example.get("route", "")
-                if route:
-                    all_routes.add(route)
-    routes_str = ", ".join(sorted(all_routes))
-    
-    # ─── 5. Get all unique ES indexes ───
-    all_es_indexes = set()
-    for intent, spec_categories in grouped_examples.items():
-        for spec_category, examples in spec_categories.items():
-            for example in examples:
-                es_index = example.get("es_index")
-                # ✅ FIX: Only add if it's a string
-                if es_index and isinstance(es_index, str):
-                    all_es_indexes.add(es_index)
-    es_indexes_str = ", ".join(sorted(all_es_indexes))
-    
-    # ─── 6. Get all unique search strategies ───
-    all_search_strategies = set()
-    for intent, spec_categories in grouped_examples.items():
-        for spec_category, examples in spec_categories.items():
-            for example in examples:
-                search_strategy = example.get("search_strategy")
-                # ✅ FIX: Only add if it's a string
-                if search_strategy and isinstance(search_strategy, str):
-                    all_search_strategies.add(search_strategy)
-    search_strategies_str = ", ".join(sorted(all_search_strategies))
+    # ─── Build the nested prompt structure ───
+    prompt = """You are a query classifier for a document management system.
 
-    print(f"Spec Categories found: {spec_categories_str}")
-    print(f"Routes found: {routes_str}")
-    print(f"ES Indexes found: {es_indexes_str}")
-    print(f"Search Strategies found: {search_strategies_str}")
-    
-    
-    # ─── 7. Build the system prompt ───
-    system_prompt = f"""
-You are a query classifier for a document management system.
+## CLASSIFICATION RULES:
+1. Detect if the query contains MULTIPLE independent actions (composite query)
+2. If composite, split into separate sub-queries and classify each
+3. For each query, provide: intent, route, es_index, search_strategy, spec_category
 
-Your job is to classify a user's query based on the examples below.
+## TRAINING EXAMPLES (Query patterns and their classifications):
 
-Here are the classification rules and examples:
-
-{examples_text}
-
-When a user asks a query, return ONLY a JSON object with these fields:
-{{
-  "intent": "{intents_str}",
-  "spec_category": "{spec_categories_str}",
-  "route": "{routes_str}",
-  "es_index": "{es_indexes_str} or null",
-  "search_strategy": "{search_strategies_str} or null"
-}}
-
-Do not add any extra text. Return ONLY the JSON object. If you are unsure, return an empty json. 
-NEVER respond with text outside the JSON object. If a field is not applicable, return null for that field.
 """
     
-    return system_prompt
+    # ─── Add examples in nested structure ───
+    for intent, spec_categories in grouped_examples.items():
+        prompt += f"{intent}: {{\n"
+        
+        for spec_category, examples in spec_categories.items():
+            prompt += f"    {spec_category}: {{\n"
+            
+            for example in examples:
+                prompt += f"        route: \"{example['route']}\"\n"
+                if example['es_index']:
+                    prompt += f"        es_index: \"{example['es_index']}\"\n"
+                else:
+                    prompt += f"        es_index: null\n"
+                if example['search_strategy']:
+                    prompt += f"        search_strategy: \"{example['search_strategy']}\"\n"
+                else:
+                    prompt += f"        search_strategy: null\n"
+                prompt += f"        spec_category: \"{spec_category}\"\n"
+            
+            prompt += f"    }}\n"
+        
+        prompt += f"}}\n\n"
+    
+    # ─── Add response format instructions ───
+    prompt += """## HOW TO RESPOND:
 
+For a SINGLE query, return ONE classification:
+{
+    "queries": [
+        {
+            "text": "original query",
+            "intent": "intent_name",
+            "spec_category": "spec_category_name",
+            "route": "route_name",
+            "es_index": "index_name or null",
+            "search_strategy": "strategy_name or null"
+        }
+    ]
+}
+
+For a COMPOSITE query, return MULTIPLE classifications:
+{
+    "queries": [
+        {
+            "text": "sub-query 1",
+            "intent": "intent_name",
+            "spec_category": "spec_category_name",
+            "route": "route_name",
+            "es_index": "index_name or null",
+            "search_strategy": "strategy_name or null"
+        },
+        {
+            "text": "sub-query 2",
+            "intent": "intent_name",
+            "spec_category": "spec_category_name",
+            "route": "route_name",
+            "es_index": "index_name or null",
+            "search_strategy": "strategy_name or null"
+        }
+    ]
+}
+
+## IMPORTANT RULES:
+- Return ONLY valid JSON
+- No explanations
+- No markdown
+- Use the exact intent and spec_category names from the examples above
+- Set es_index and search_strategy to null if not applicable
+- Use your judgment to match the query to the most appropriate intent and spec_category
+- For composite queries, split naturally based on the query structure
+"""
+    
+    return prompt

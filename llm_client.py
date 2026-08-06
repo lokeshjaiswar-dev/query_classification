@@ -1,52 +1,38 @@
 # ============================================
-# FILE: llm_client.py (FIXED)
-# PURPOSE: LLM Client with Context
+# FILE: llm_client.py
+# PURPOSE: Simple LLM Client
 # ============================================
 
 import json
 import requests
-from typing import Dict, Optional
+from typing import Dict, List
 
 
 class LLMClient:
     """
-    Client for calling OpenRouter LLM API.
+    Simple LLM client for query classification.
     """
     
-    def __init__(
-        self,
-        model: str,
-        api_key: str,
-        endpoint: str = "https://openrouter.ai/api/v1/chat/completions"
-    ):
-        """
-        Initialize the LLM client.
-        
-        Args:
-            model: Model name (OpenRouter model)
-            api_key: OpenRouter API key
-            endpoint: OpenRouter API endpoint
-        """
+    def __init__(self, model: str, api_key: str, endpoint: str):
         self.model = model
         self.api_key = api_key
         self.endpoint = endpoint
         self.system_prompt = None
     
-    def set_system_prompt(self, system_prompt: str):
-        """
-        Set the system prompt (context) once.
-        """
-        self.system_prompt = system_prompt
+    def set_system_prompt(self, prompt: str):
+        """Set the system prompt once."""
+        self.system_prompt = prompt
     
-    def classify_query(self, query: str) -> Dict:
+    def classify(self, query: str) -> List[Dict]:
         """
-        Classify a query using the stored system prompt.
+        Classify a query (handles both single and composite).
+        Returns a list of classifications.
         """
         if not self.system_prompt:
-            raise ValueError("System prompt not set. Call set_system_prompt() first.")
+            raise ValueError("System prompt not set!")
         
         try:
-            # ─── Build the request ───
+            # ─── Build request ───
             messages = [
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": f'Classify this query: "{query}"'}
@@ -55,8 +41,8 @@ class LLMClient:
             payload = {
                 "model": self.model,
                 "messages": messages,
-                "temperature": 0.2,
-                "max_tokens": 1000,
+                "temperature": 0.1,
+                "max_tokens": 2000,
                 "top_p": 0.1
             }
             
@@ -65,49 +51,35 @@ class LLMClient:
                 "Authorization": f"Bearer {self.api_key}"
             }
             
-            # ─── Call the API ───
+            # ─── Call API ───
             response = requests.post(
                 self.endpoint,
                 headers=headers,
                 json=payload,
-                timeout=60
+                timeout=30
             )
             
-            # ─── Check response ───
             if response.status_code != 200:
                 print(f"❌ API Error: {response.status_code}")
                 print(f"Response: {response.text}")
-                return self._get_default()
+                return self._default_classification(query)
             
             # ─── Parse response ───
             data = response.json()
-            
-            # Check if 'choices' exists
-            if "choices" not in data or len(data["choices"]) == 0:
-                print("❌ No choices in response")
-                print(f"Response data: {data}")
-                return self._get_default()
-            
             content = data["choices"][0]["message"]["content"]
+
+            print(f"\n🔹 LLM Response:\n{content}\n")
             
-            return self._parse_response(content)
+            return self._parse_response(content, query)
             
-        except json.JSONDecodeError as e:
-            print(f"❌ JSON decode error: {e}")
-            return self._get_default()
-        except KeyError as e:
-            print(f"❌ Missing key in response: {e}")
-            return self._get_default()
         except Exception as e:
-            print(f"❌ Error calling LLM: {e}")
-            return self._get_default()
+            print(f"❌ Error: {e}")
+            return self._default_classification(query)
     
-    def _parse_response(self, content: str) -> Dict:
-        """
-        Parse the LLM response into a dictionary.
-        """
+    def _parse_response(self, content: str, original_query: str) -> List[Dict]:
+        """Parse LLM response into list of classifications."""
         try:
-            # Clean the response
+            # Clean response
             content = content.strip()
             
             # Remove markdown code blocks
@@ -118,32 +90,40 @@ class LLMClient:
             
             # Parse JSON
             result = json.loads(content)
-            print(f"✅ Parsed response: {result}")
             
-            # Ensure all fields exist
-            return {
-                "intent": result.get("intent", "search"),
-                "spec_category": result.get("spec_category", "File Retrieval"),
-                "route": result.get("route", "Elasticsearch search"),
-                "es_index": result.get("es_index"),
-                "search_strategy": result.get("search_strategy")
-            }
-        except json.JSONDecodeError as e:
-            print(f"❌ Error parsing JSON: {e}")
-            print(f"Content: {content}")
-            return self._get_default()
+            # Handle different response formats
+            if isinstance(result, list):
+                queries = result
+            elif isinstance(result, dict) and "queries" in result:
+                queries = result["queries"]
+            else:
+                # Single classification
+                queries = [result]
+            
+            # Ensure each has required fields
+            for q in queries:
+                if "text" not in q:
+                    q["text"] = original_query
+                q.setdefault("intent", "search")
+                q.setdefault("spec_category", "File Retrieval")
+                q.setdefault("route", "Elasticsearch search")
+                q.setdefault("es_index", None)
+                q.setdefault("search_strategy", None)
+            
+            return queries
+            
         except Exception as e:
-            print(f"❌ Error parsing response: {e}")
-            return self._get_default()
+            print(f"❌ Parse error: {e}")
+            print(f"Content: {content}")
+            return self._default_classification(original_query)
     
-    def _get_default(self) -> Dict:
-        """
-        Return default classification when everything fails.
-        """
-        return {
+    def _default_classification(self, query: str) -> List[Dict]:
+        """Default classification when everything fails."""
+        return [{
+            "text": query,
             "intent": "search",
             "spec_category": "File Retrieval",
             "route": "Elasticsearch search",
-            "es_index": "document",
+            "es_index": None,
             "search_strategy": "BFS"
-        }
+        }]

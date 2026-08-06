@@ -1,113 +1,96 @@
 # ============================================
-# FILE: main.py (LLM-ONLY APPROACH)
-# PURPOSE: Pure LLM-based composite query classification
+# FILE: main.py
+# PURPOSE: Simple interactive classifier
 # ============================================
 
-import os
 import json
-from dotenv import load_dotenv
-from classification_builder import (
-    build_grouped_examples,
-    build_system_prompt_with_examples
-)
+from config import API_KEY, MODEL, ENDPOINT, CSV_PATH
+from classification_builder import build_grouped_examples, build_classification_prompt
 from llm_client import LLMClient
-from composite_analyzer import CompositeQueryProcessor
-
-# ─── LOAD ENVIRONMENT VARIABLES ───
-load_dotenv()
-
-# ─── CONFIGURATION ───
-CSV_PATH = "query_classifications.csv"
-MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
-API_KEY = os.getenv("OPENROUTER_API_KEY")
-if not API_KEY:
-    print("❌ ERROR: OPENROUTER_API_KEY not found in .env file")
-    exit(1)
-
-ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
 
-def initialize_classifier():
-    """
-    Initialize the classifier once.
-    """
-    print("🔧 Initializing classifier...")
-    
-    grouped_examples = build_grouped_examples(CSV_PATH, max_examples_per_category=10)
-    print("✅ Grouped examples built from CSV")
-    
-    system_prompt = build_system_prompt_with_examples(grouped_examples)
-    print("✅ System prompt built")
-    
-    client = LLMClient(model=MODEL, api_key=API_KEY, endpoint=ENDPOINT)
-    client.set_system_prompt(system_prompt)
-    print("✅ LLM client initialized")
-    
-    return client
+def print_grouped_structure(grouped_examples):
+    """Print the nested structure for debugging."""
+    print("\n📚 TRAINING DATA STRUCTURE:")
+    print("=" * 50)
+    for intent, spec_categories in grouped_examples.items():
+        print(f"\n{intent}: {{")
+        for spec_category, examples in spec_categories.items():
+            print(f"    {spec_category}: {{")
+            for example in examples:
+                print(f"        route: \"{example['route']}\"")
+                print(f"        es_index: {example['es_index']}")
+                print(f"        search_strategy: {example['search_strategy']}")
+            print(f"    }}")
+        print(f"}}")
+    print("=" * 50)
 
 
 def main():
-    """
-    Interactive query classification with LLM-based composite detection.
-    """
+    """Interactive query classification."""
     print("=" * 60)
-    print("INTERACTIVE QUERY CLASSIFIER (LLM-Only Composite Detection)")
+    print("QUERY CLASSIFIER (Single + Composite Support)")
     print("=" * 60)
     
-    client = initialize_classifier()
-    processor = CompositeQueryProcessor(client)
+    # ─── Initialize ───
+    print("\n🔧 Initializing...")
     
-    print("\n" + "=" * 60)
-    print("READY! Enter your queries below.")
-    print("Type 'exit' or 'quit' to stop.")
-    print("\n💡 The LLM will automatically detect composite queries:")
-    print("  - 'Find my resume and find my contracts'")
-    print("  - 'Delete Draft.docx then move it to archive'")
-    print("  - 'Compare these files and summarize them'")
-    print("=" * 60)
+    # Build grouped examples with nested structure
+    grouped_examples = build_grouped_examples(CSV_PATH, max_examples_per_category=3)
+    print("✅ Grouped examples built")
     
+    # Print the structure for debugging
+    print_grouped_structure(grouped_examples)
+    
+    # Build the prompt using the nested structure
+    system_prompt = build_classification_prompt(grouped_examples)
+    print("\n✅ System prompt built")
+    
+    # Initialize LLM client
+    client = LLMClient(model=MODEL, api_key=API_KEY, endpoint=ENDPOINT)
+    client.set_system_prompt(system_prompt)
+    print("✅ Ready!\n")
+    
+    # ─── Interactive loop ───
     while True:
-        query = input("\n🔍 Enter your query: ").strip()
+        query = input("\n🔍 Enter query (or 'exit'): ").strip()
         
         if query.lower() in ["exit", "quit", "q"]:
             print("\n👋 Goodbye!")
             break
         
         if not query:
-            print("⚠️ Please enter a query.")
             continue
         
-        try:
-            # Process the query (LLM detects composite)
-            results = processor.process(query)
-            
-            # Print results
-            print("\n" + "=" * 50)
-            if len(results) == 1:
-                print("CLASSIFICATION RESULT")
+        # ─── Classify ───
+        print("\n⏳ Classifying...")
+        results = client.classify(query)
+        
+        # ─── Display results ───
+        print("\n" + "=" * 50)
+        if len(results) == 1:
+            print("CLASSIFICATION RESULT")
+        else:
+            print(f"COMPOSITE QUERY - {len(results)} PARTS")
+        print("=" * 50)
+        
+        for i, result in enumerate(results, 1):
+            if len(results) > 1:
+                print(f"\n📌 Part {i}:")
             else:
-                print(f"COMPOSITE QUERY - {len(results)} CLASSIFICATIONS")
-            print("=" * 50)
+                print()
             
-            for i, result in enumerate(results, 1):
-                if len(results) > 1:
-                    print(f"\n📌 Query {i}:")
-                else:
-                    print()
-                print(f"  Intent:           {result.get('intent', 'N/A')}")
-                print(f"  Spec Category:    {result.get('spec_category', 'N/A')}")
-                print(f"  Route:            {result.get('route', 'N/A')}")
-                print(f"  ES Index:         {result.get('es_index', 'N/A')}")
-                print(f"  Search Strategy:  {result.get('search_strategy', 'N/A')}")
-            
-            print("\n" + "=" * 50)
-            
-            # JSON output
-            print("\n📋 JSON Output:")
-            print(json.dumps(results, indent=2))
-            
-        except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"  Query:           {result.get('text', query)}")
+            print(f"  Intent:          {result.get('intent', 'N/A')}")
+            print(f"  Spec Category:   {result.get('spec_category', 'N/A')}")
+            print(f"  Route:           {result.get('route', 'N/A')}")
+            print(f"  ES Index:        {result.get('es_index', 'N/A')}")
+            print(f"  Search Strategy: {result.get('search_strategy', 'N/A')}")
+        
+        # ─── JSON output ───
+        print("\n📋 JSON:")
+        print(json.dumps(results, indent=2))
+        print("=" * 50)
 
 
 if __name__ == "__main__":
