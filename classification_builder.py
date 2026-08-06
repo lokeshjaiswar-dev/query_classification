@@ -1,11 +1,16 @@
+# ============================================
+# FILE: classification_builder.py (FIXED)
+# PURPOSE: Fix variable substitution in IMPORTANT RULES
+# ============================================
+
 import pandas as pd
 from collections import defaultdict
-from typing import Dict, Any
+from typing import Dict
 
 
 def build_grouped_examples(
     csv_path: str,
-    max_examples_per_category: int = 3
+    max_examples_per_category: int = 2
 ) -> Dict[str, Dict[str, list]]:
     """
     Build grouped examples with structure:
@@ -39,9 +44,9 @@ def build_grouped_examples(
         }
         
         # Clean up empty values
-        if example["es_index"] == "-" or example["es_index"] == "":
+        if pd.isna(example["es_index"]) or example["es_index"] == "-" or example["es_index"] == "":
             example["es_index"] = None
-        if example["search_strategy"] == "-" or example["search_strategy"] == "":
+        if pd.isna(example["search_strategy"]) or example["search_strategy"] == "-" or example["search_strategy"] == "":
             example["search_strategy"] = None
         
         # Add to group (limit per category)
@@ -54,103 +59,86 @@ def build_grouped_examples(
 
 def build_classification_prompt(grouped_examples: Dict) -> str:
     """
-    Build the classification prompt with nested structure:
-    intent_name: {
-        spec_category_name: {
-            examples
-        }
-    }
+    Build the classification prompt with dynamic intents from CSV.
     """
-    # ─── Build the nested prompt structure ───
-    prompt = """You are a query classifier for a document management system.
-
-## CLASSIFICATION RULES:
-1. DETECT COMPOSITE QUERIES: A query is COMPOSITE if it contains MULTIPLE independent actions separated by:
-   - Conjunctions: "and", "also", "then", "after that", "finally", "additionally"
-   - Multiple verbs: "find X and get Y", "delete X then summarize Y"
-   - Multiple requests: "show me X and also tell me about Y"
-   
-2. For COMPOSITE queries, SPLIT into separate sub-queries and classify EACH action independently
-   - Example: "find my resume and get my contracts" → 2 sub-queries
-   - Example: "delete file1, move file2, and rename file3" → 3 sub-queries
-   - Example: "get all files and return summary and how are you" → 3 sub-queries
-
-3. For SINGLE queries, return just ONE classification
-
-## TRAINING EXAMPLES (Query patterns and their classifications):
-
-"""
+    # ─── Get all unique intents dynamically from CSV ───
+    all_intents = list(grouped_examples.keys())
+    intents_str = ", ".join(all_intents)
     
-    # ─── Add examples in nested structure ───
+    # ─── Build the examples section ───
+    examples_section = ""
     for intent, spec_categories in grouped_examples.items():
-        prompt += f"{intent}: {{\n"
+        examples_section += f"{intent}: {{\n"
         
         for spec_category, examples in spec_categories.items():
-            prompt += f"    {spec_category}: {{\n"
+            examples_section += f"    {spec_category}: {{\n"
             
             for example in examples:
-                prompt += f"        route: \"{example['route']}\"\n"
+                examples_section += f"        route: \"{example['route']}\"\n"
                 if example['es_index']:
-                    prompt += f"        es_index: \"{example['es_index']}\"\n"
+                    examples_section += f"        es_index: \"{example['es_index']}\"\n"
                 else:
-                    prompt += f"        es_index: null\n"
+                    examples_section += f"        es_index: null\n"
                 if example['search_strategy']:
-                    prompt += f"        search_strategy: \"{example['search_strategy']}\"\n"
+                    examples_section += f"        search_strategy: \"{example['search_strategy']}\"\n"
                 else:
-                    prompt += f"        search_strategy: null\n"
-                prompt += f"        spec_category: \"{spec_category}\"\n"
+                    examples_section += f"        search_strategy: null\n"
             
-            prompt += f"    }}\n"
+            examples_section += f"    }}\n"
         
-        prompt += f"}}\n\n"
+        examples_section += f"}}\n\n"
     
-    # ─── Add response format instructions ───
-    prompt += """## HOW TO RESPOND:
+    # ─── Build the complete prompt ───
+    prompt = f"""You are a query classifier for a document management system.
 
-For a SINGLE query, return ONE classification:
-{
+## CLASSIFICATION RULES:
+1. DETECT COMPOSITE QUERIES: A query is COMPOSITE if it contains MULTIPLE independent actions
+2. For COMPOSITE queries, SPLIT into separate sub-queries
+3. Classify EACH sub-query with the appropriate intent
+
+## TRAINING EXAMPLES:
+
+{examples_section}
+
+## RESPONSE FORMAT:
+
+For SINGLE query:
+{{
     "queries": [
-        {
+        {{
             "text": "original query",
             "intent": "intent_name",
             "spec_category": "spec_category_name",
             "route": "route_name",
             "es_index": "index_name or null",
             "search_strategy": "strategy_name or null"
-        }
+        }}
     ]
-}
+}}
 
-For a COMPOSITE query, return MULTIPLE classifications:
-{
+For COMPOSITE query:
+{{
     "queries": [
-        {
+        {{
             "text": "sub-query 1",
             "intent": "intent_name",
             "spec_category": "spec_category_name",
             "route": "route_name",
             "es_index": "index_name or null",
             "search_strategy": "strategy_name or null"
-        },
-        {
-            "text": "sub-query 2",
-            "intent": "intent_name",
-            "spec_category": "spec_category_name",
-            "route": "route_name",
-            "es_index": "index_name or null",
-            "search_strategy": "strategy_name or null"
-        }
+        }}
     ]
-}
+}}
 
 ## IMPORTANT RULES:
 - Return ONLY valid JSON
-- No explanations
-- No markdown
-- Use the exact intent and spec_category names from the examples above
+- No explanations, no markdown
+- The "intent" field MUST be one of: {intents_str}
+- The "spec_category" field MUST be from the examples above
+- "intent" and "spec_category" are DIFFERENT fields - DO NOT use spec_category values as intent
 - Set es_index and search_strategy to null if not applicable
-- Use your judgment to match the query to the most appropriate intent and spec_category
 - For composite queries, split naturally based on the query structure
+- Each sub-query in a composite query gets its own classification
 """
-    
+    # print(f"\n✅ Classification prompt built {prompt}")
     return prompt
