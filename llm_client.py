@@ -68,7 +68,7 @@ class LLMClient:
             data = response.json()
             content = data["choices"][0]["message"]["content"]
 
-            print(f"\n🔹 LLM Response:\n{content}\n")
+            # print(f"\n🔹 LLM Response:\n{content}\n")
             
             return self._parse_response(content, query)
             

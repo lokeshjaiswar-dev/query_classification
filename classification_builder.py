@@ -65,9 +65,17 @@ def build_classification_prompt(grouped_examples: Dict) -> str:
     prompt = """You are a query classifier for a document management system.
 
 ## CLASSIFICATION RULES:
-1. Detect if the query contains MULTIPLE independent actions (composite query)
-2. If composite, split into separate sub-queries and classify each
-3. For each query, provide: intent, route, es_index, search_strategy, spec_category
+1. DETECT COMPOSITE QUERIES: A query is COMPOSITE if it contains MULTIPLE independent actions separated by:
+   - Conjunctions: "and", "also", "then", "after that", "finally", "additionally"
+   - Multiple verbs: "find X and get Y", "delete X then summarize Y"
+   - Multiple requests: "show me X and also tell me about Y"
+   
+2. For COMPOSITE queries, SPLIT into separate sub-queries and classify EACH action independently
+   - Example: "find my resume and get my contracts" → 2 sub-queries
+   - Example: "delete file1, move file2, and rename file3" → 3 sub-queries
+   - Example: "get all files and return summary and how are you" → 3 sub-queries
+
+3. For SINGLE queries, return just ONE classification
 
 ## TRAINING EXAMPLES (Query patterns and their classifications):
 
