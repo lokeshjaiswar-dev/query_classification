@@ -27,7 +27,7 @@ class LLMClient:
             raise ValueError("System prompt not set!")
         
         try:
-            
+
             messages = [
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": f'Classify this query: "{query}"'}
@@ -72,7 +72,7 @@ class LLMClient:
     def _parse_response(self, content: str, original_query: str) -> List[Dict]:
         """Parse LLM response into list of classifications."""
         try:
-            # Clean response
+
             content = content.strip()
             
             # Remove markdown code blocks
