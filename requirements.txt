@@ -1,3 +1,22 @@
-pandas==2.2.3
-requests==2.31.0
-python-dotenv==1.0.1
+# ============================================
+# REQUIREMENTS.TXT - QueryClassifier Project
+# ============================================
+
+# ─── DATA PROCESSING ──────────────────────────
+pandas==2.2.3          # CSV file handling
+pypdf==5.1.0           # PDF text extraction
+
+# ─── VECTOR STORE & EMBEDDINGS ───────────────
+numpy==1.26.4          # Numerical operations
+faiss-cpu==1.8.0       # Vector similarity search (CPU version)
+sentence-transformers==3.3.1  # Text to embeddings
+torch==2.5.1           # PyTorch (backend for sentence-transformers)
+
+# ─── API & ENVIRONMENT ────────────────────────
+requests==2.31.0       # API calls (OpenRouter)
+python-dotenv==1.0.1   # Load .env file
+
+# ─── OPTIONAL (if you need these later) ──────
+# elasticsearch==8.17.0  # If you switch to Elasticsearch
+# openai==1.59.3         # If you use OpenAI directly
+
