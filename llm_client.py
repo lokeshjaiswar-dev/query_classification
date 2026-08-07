@@ -1,11 +1,17 @@
+# ============================================
+# FILE: llm_client.py
+# PURPOSE: LLM Client with Classification + Vector Search
+# ============================================
+
 import json
 import requests
-from typing import Dict, List
+from typing import Dict, List, Optional
+from vector_store import VectorStore
 
 
 class LLMClient:
     """
-    Simple LLM client for query classification.
+    LLM client for query classification with vector search.
     """
     
     def __init__(self, model: str, api_key: str, endpoint: str):
@@ -13,10 +19,15 @@ class LLMClient:
         self.api_key = api_key
         self.endpoint = endpoint
         self.system_prompt = None
+        self.vector_store = None
     
     def set_system_prompt(self, prompt: str):
         """Set the system prompt once."""
         self.system_prompt = prompt
+    
+    def set_vector_store(self, vector_store: VectorStore):
+        """Set the vector store for semantic search."""
+        self.vector_store = vector_store
     
     def classify(self, query: str) -> List[Dict]:
         """
@@ -27,7 +38,6 @@ class LLMClient:
             raise ValueError("System prompt not set!")
         
         try:
-
             messages = [
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": f'Classify this query: "{query}"'}
@@ -60,8 +70,6 @@ class LLMClient:
             
             data = response.json()
             content = data["choices"][0]["message"]["content"]
-
-            # print(f"\n🔹 LLM Response:\n{content}\n")
             
             return self._parse_response(content, query)
             
@@ -72,7 +80,6 @@ class LLMClient:
     def _parse_response(self, content: str, original_query: str) -> List[Dict]:
         """Parse LLM response into list of classifications."""
         try:
-
             content = content.strip()
             
             if "```json" in content:

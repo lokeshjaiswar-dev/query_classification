@@ -8,6 +8,7 @@ CSV_PATH = "query_classifications.csv"
 MODEL = os.getenv("OPENROUTER_MODEL")
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+DATA_DIR = os.getenv("DATA_DIR", "employees")
 
 if not API_KEY:
     raise ValueError("❌ OPENROUTER_API_KEY not found in .env file")

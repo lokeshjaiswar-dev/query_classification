@@ -1,82 +1,37 @@
-"""Load HR/DMS data (CSV rows + PDF text) into searchable text chunks."""
+# ============================================
+# FILE: ingest.py
+# PURPOSE: Load PDF documents from nested employee folders
+# ============================================
+
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import pandas as pd
 from pypdf import PdfReader
 import os
 
-ROOT = Path(__file__).resolve().parent.parent
+from config import DATA_DIR
 
 CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "800"))
 CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "120"))
-DATA_DIR: Path = Path(os.getenv("DATA_DIR", str(ROOT)))
+
 
 @dataclass
 class Chunk:
     """A single piece of retrievable text plus its provenance."""
-
     text: str
-    source: str  # relative path or logical source name
-    type: str  # "csv" | "pdf"
+    source: str          # Relative path like "EMP001_Advik_Maharaj/resume.pdf"
+    type: str            # "pdf"
+    employee_id: str     # "EMP001"
+    employee_name: str   # "Advik_Maharaj"
+    filename: str        # "resume.pdf"
     meta: dict = field(default_factory=dict)
 
 
-_ID_RE = re.compile(r"(EMP\d{3}|CTR\d{3})", re.IGNORECASE)
-
-
-def _entity_id(path: Path) -> str | None:
-    m = _ID_RE.search(str(path))
-    return m.group(1).upper() if m else None
-
-
-def extract_entity_ids(text: str) -> list[str]:
-    """Pull EMP###/CTR### identifiers out of free text (upper-cased, de-duped).
-
-    Used to scope retrieval to the entity a question names, so a query about one
-    employee cannot pull in near-identical documents belonging to others.
-    """
-    seen: dict[str, None] = {}
-    for m in _ID_RE.finditer(text or ""):
-        seen[m.group(1).upper()] = None
-    return list(seen)
-
-
-def _csv_chunks(data_dir: Path) -> list[Chunk]:
-    """One chunk per CSV row, rendered as `header \n col: value` lines."""
-    chunks: list[Chunk] = []
-    meta_dir = data_dir / "metadata"
-    if not meta_dir.is_dir():
-        return chunks
-
-    for csv_path in sorted(meta_dir.glob("*.csv")):
-        try:
-            df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
-        except Exception as exc:  
-            print(f"[ingest] skipping {csv_path.name}: {exc}")
-            continue
-
-        rel = csv_path.relative_to(data_dir).as_posix()
-        for idx, row in df.iterrows():
-            body = "\n".join(f"{col}: {val}" for col, val in row.items() if str(val).strip())
-            if not body.strip():
-                continue
-            text = f"[{csv_path.stem}] row {idx + 1}\n{body}"
-            eid = None
-            for key in ("emp_id", "contract_id"):
-                if key in row and str(row[key]).strip():
-                    eid = str(row[key]).strip().upper()
-                    break
-            chunks.append(
-                Chunk(text=text, source=rel, type="csv", meta={"entity_id": eid})
-            )
-    return chunks
-
-
 def _split(text: str, size: int, overlap: int) -> list[str]:
+    """Split text into overlapping chunks."""
     text = re.sub(r"[ \t]+", " ", text).strip()
     if not text:
         return []
@@ -91,41 +46,94 @@ def _split(text: str, size: int, overlap: int) -> list[str]:
     return parts
 
 
-def _pdf_chunks(data_dir: Path) -> list[Chunk]:
-    """Extract text from every PDF under contracts/ and employees/."""
+def _extract_employee_info(path: Path) -> tuple[str, str]:
+    """
+    Extract employee ID and name from folder name.
+    Example: "EMP001_Advik_Maharaj" → ("EMP001", "Advik_Maharaj")
+    """
+    folder_name = path.name
+    parts = folder_name.split("_", 1)  # Split on first underscore only
+    if len(parts) == 2 and parts[0].startswith("EMP"):
+        return parts[0], parts[1]
+    return "", ""
+
+
+def load_chunks(data_dir: Path | str | None = None) -> list[Chunk]:
+    """Load all PDF chunks from nested employee folders."""
+    if data_dir is None:
+        data_dir = Path(DATA_DIR)
+    else:
+        data_dir = Path(data_dir)
+    
+    print(f"[ingest] 📂 Loading PDFs from: {data_dir}")
+    
+    if not data_dir.exists():
+        print(f"[ingest] ⚠️ Directory not found: {data_dir}")
+        return []
+    
     chunks: list[Chunk] = []
-    for sub in ("employees"):
-        base = data_dir / sub
-        if not base.is_dir():
+    
+    # Find all employee folders (any folder starting with "EMP")
+    employee_folders = [f for f in data_dir.iterdir() if f.is_dir() and f.name.startswith("EMP")]
+    
+    if not employee_folders:
+        print(f"[ingest] ⚠️ No employee folders found in {data_dir}")
+        print(f"[ingest] 💡 Expected structure: employees/EMP001_Name/ *.pdf")
+        return []
+    
+    print(f"[ingest] 📁 Found {len(employee_folders)} employee folders")
+    
+    total_pdfs = 0
+    
+    for emp_folder in employee_folders:
+        emp_id, emp_name = _extract_employee_info(emp_folder)
+        
+        if not emp_id:
+            print(f"[ingest] ⚠️ Skipping invalid folder: {emp_folder.name}")
             continue
-        for pdf_path in sorted(base.rglob("*.pdf")):
+        
+        # Find all PDFs in this employee folder
+        pdf_files = list(emp_folder.glob("*.pdf"))
+        
+        if not pdf_files:
+            print(f"[ingest] ⚠️ No PDFs in {emp_folder.name}")
+            continue
+        
+        print(f"[ingest] 📄 {emp_id} ({emp_name}): {len(pdf_files)} PDFs")
+        total_pdfs += len(pdf_files)
+        
+        for pdf_path in pdf_files:
             try:
                 reader = PdfReader(str(pdf_path))
                 raw = "\n".join((page.extract_text() or "") for page in reader.pages)
-            except Exception as exc:  # noqa: BLE001
-                print(f"[ingest] skipping {pdf_path.name}: {exc}")
+                
+                if not raw.strip():
+                    print(f"[ingest] ⚠️ No text extracted from {pdf_path.name}")
+                    continue
+                    
+            except Exception as exc:
+                print(f"[ingest] ⚠️ Skipping {pdf_path.name}: {exc}")
                 continue
 
             rel = pdf_path.relative_to(data_dir).as_posix()
-            eid = _entity_id(pdf_path)
+            
+            # Split into chunks
             for piece in _split(raw, CHUNK_SIZE, CHUNK_OVERLAP):
-                header = f"[{rel}]"
-                if eid:
-                    header += f" ({eid})"
                 chunks.append(
                     Chunk(
-                        text=f"{header}\n{piece}",
+                        text=piece,
                         source=rel,
                         type="pdf",
-                        meta={"entity_id": eid},
+                        employee_id=emp_id,
+                        employee_name=emp_name,
+                        filename=pdf_path.name,
+                        meta={
+                            "employee_id": emp_id,
+                            "employee_name": emp_name,
+                            "filename": pdf_path.name
+                        }
                     )
                 )
-    return chunks
-
-
-def load_chunks(data_dir: Path | None = None) -> list[Chunk]:
-    """Load all CSV + PDF chunks from the data directory."""
-    data_dir = Path(data_dir or config.DATA_DIR)
-    chunks = _csv_chunks(data_dir) + _pdf_chunks(data_dir)
-    print(f"[ingest] loaded {len(chunks)} chunks from {data_dir}")
+    
+    print(f"[ingest] ✅ Loaded {len(chunks)} chunks from {total_pdfs} PDFs across {len(employee_folders)} employees")
     return chunks

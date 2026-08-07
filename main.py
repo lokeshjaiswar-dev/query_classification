@@ -1,55 +1,87 @@
 # ============================================
 # FILE: main.py
-# PURPOSE: Simple interactive classifier
+# PURPOSE: Query Classifier + PDF Vector Search
 # ============================================
 
 import json
-from config import API_KEY, MODEL, ENDPOINT, CSV_PATH
+import os
+from config import API_KEY, MODEL, ENDPOINT, CSV_PATH, DATA_DIR
 from classification_builder import build_grouped_examples, build_classification_prompt
 from llm_client import LLMClient
+from ingest import load_chunks
+from vector_store import VectorStore
 
 
-# def print_grouped_structure(grouped_examples):
-#     """Print the nested structure for debugging."""
-#     print("\n📚 TRAINING DATA STRUCTURE:")
-#     print("=" * 50)
-#     for intent, spec_categories in grouped_examples.items():
-#         print(f"\n{intent}: {{")
-#         for spec_category, examples in spec_categories.items():
-#             print(f"    {spec_category}: {{")
-#             for example in examples:
-#                 print(f"        route: \"{example['route']}\"")
-#                 print(f"        es_index: {example['es_index']}")
-#                 print(f"        search_strategy: {example['search_strategy']}")
-#             print(f"    }}")
-#         print(f"}}")
-#     print("=" * 50)
+def initialize_vector_store():
+    """Load PDFs and build vector store."""
+    print("\n🔧 Loading PDFs and building vector store...")
+    
+    # Check if data directory exists
+    if not os.path.exists(DATA_DIR):
+        print(f"   ⚠️ Data directory not found: {DATA_DIR}")
+        print(f"   ⚠️ Vector search will be disabled.")
+        return None
+    
+    # Load chunks from PDFs
+    chunks = load_chunks()
+    
+    if not chunks:
+        print("   ⚠️ No chunks created. Vector search will be disabled.")
+        return None
+    
+    # Build vector store
+    vector_store = VectorStore()
+    vector_store.build(chunks)
+    
+    # Show employee information
+    employees = vector_store.get_employees()
+    print(f"\n   👥 Employees loaded:")
+    for emp_id, emp_name in employees:
+        print(f"      - {emp_id}: {emp_name}")
+    
+    print(f"   ✅ Vector store built with {vector_store.size} vectors")
+    
+    return vector_store
 
 
 def main():
-    """Interactive query classification."""
-    # print("=" * 60)
-    print("QUERY CLASSIFIER (Single + Composite Support)")
-    # print("=" * 60)
+    """Interactive query classification with vector search."""
+    print("=" * 60)
+    print("QUERY CLASSIFIER + PDF VECTOR SEARCH")
+    print("=" * 60)
     
-    # ─── Initialize ───
-    # print("\n🔧 Initializing...")
+    # ─── Initialize Classifier ───
+    print("\n🔧 Initializing classifier...")
     
-    # Build grouped examples with nested structure
+    # Build grouped examples
     grouped_examples = build_grouped_examples(CSV_PATH, max_examples_per_category=7)
-    # print("✅ Grouped examples built")
+    print("   ✅ Grouped examples built")
     
-    # Print the structure for debugging
-    # print_grouped_structure(grouped_examples)
-    
-    # Build the prompt using the nested structure
+    # Build the prompt
     system_prompt = build_classification_prompt(grouped_examples)
-    # print("\n✅ System prompt built")
+    print("   ✅ System prompt built")
     
     # Initialize LLM client
     client = LLMClient(model=MODEL, api_key=API_KEY, endpoint=ENDPOINT)
     client.set_system_prompt(system_prompt)
-    # print("✅ Ready!\n")
+    print("   ✅ LLM client ready")
+    
+    # ─── Initialize Vector Store ───
+    vector_store = initialize_vector_store()
+    
+    # Set vector store in client
+    if vector_store:
+        client.set_vector_store(vector_store)
+    
+    print("\n" + "=" * 60)
+    print("✅ READY! Enter your queries below.")
+    print("Type 'exit' or 'quit' to stop.")
+    print("\n💡 Examples:")
+    print("   - 'find resume of Advik'")
+    print("   - 'show me documents for EMP001'")
+    print("   - 'find increment letters'")
+    print("   - 'search offer letters'")
+    print("=" * 60)
     
     # ─── Interactive loop ───
     while True:
@@ -62,20 +94,27 @@ def main():
         if not query:
             continue
         
-        # ─── Classify ───
-        print("\n⏳ Classifying...")
-        results = client.classify(query)
+        # ─── Classify and Search ───
+        print("\n⏳ Processing...")
         
-        # ─── Display results ───
-        # print("\n" + "=" * 50)
-        if len(results) == 1:
+        # Step 1: Classify
+        classifications = client.classify(query)
+        
+        # Step 2: Search vector store
+        search_results = []
+        if vector_store:
+            search_results = vector_store.search(query, k=5)
+        
+        # ─── Display Classification Results ───
+        print("\n" + "=" * 50)
+        if len(classifications) == 1:
             print("CLASSIFICATION RESULT")
         else:
-            print(f"COMPOSITE QUERY - {len(results)} PARTS")
-        # print("=" * 50)
+            print(f"COMPOSITE QUERY - {len(classifications)} PARTS")
+        print("=" * 50)
         
-        for i, result in enumerate(results, 1):
-            if len(results) > 1:
+        for i, result in enumerate(classifications, 1):
+            if len(classifications) > 1:
                 print(f"\n📌 Part {i}:")
             else:
                 print()
@@ -87,10 +126,21 @@ def main():
             print(f"  ES Index:        {result.get('es_index', 'N/A')}")
             print(f"  Search Strategy: {result.get('search_strategy', 'N/A')}")
         
-        # ─── JSON output ───
-        # print("\n📋 JSON:")
-        # print(json.dumps(results, indent=2))
-        # print("=" * 50)
+        # ─── Display Search Results ───
+        if search_results:
+            print("\n" + "-" * 50)
+            print("PDF SEARCH RESULTS")
+            print("-" * 50)
+            
+            for i, (chunk, score) in enumerate(search_results, 1):
+                print(f"\n  [{i}] Score: {score:.4f}")
+                print(f"      Employee: {chunk.employee_id} - {chunk.employee_name}")
+                print(f"      File: {chunk.filename}")
+                print(f"      Source: {chunk.source}")
+                preview = chunk.text[:200].replace('\n', ' ')
+                print(f"      Preview: {preview}...")
+        
+        print("\n" + "=" * 50)
 
 
 if __name__ == "__main__":
