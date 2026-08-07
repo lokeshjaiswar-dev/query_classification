@@ -46,7 +46,6 @@ class LLMClient:
                 "Authorization": f"Bearer {self.api_key}"
             }
             
-            # ─── Call API ───
             response = requests.post(
                 self.endpoint,
                 headers=headers,
