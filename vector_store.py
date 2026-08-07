@@ -35,7 +35,7 @@ class VectorStore:
             texts,
             batch_size=64,
             show_progress_bar=False,
-            normalize_embeddings=True,  # cosine similarity via inner product
+            normalize_embeddings=True,
             convert_to_numpy=True,
         )
         return np.asarray(vecs, dtype="float32")
@@ -58,7 +58,7 @@ class VectorStore:
         print(f"[vectorstore] ✅ Index built with {index.ntotal} vectors")
         return index.ntotal
 
-    def search(self, query: str, k: int = 5, employee_id: str | None = None) -> list[tuple[Chunk, float]]:
+    def search(self, query: str, k: int = 15, employee_id: str | None = None) -> list[tuple[Chunk, float]]:
         """
         Search for the top k most relevant chunks.
         Optionally filter by employee_id.
@@ -90,7 +90,6 @@ class VectorStore:
             
             return results
         
-        # Search all chunks
         k = max(1, min(k, len(self.chunks)))
         q = self._embed([query])
         scores, ids = self.index.search(q, k)

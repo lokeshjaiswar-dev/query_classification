@@ -98,12 +98,12 @@ def main():
         print("\n⏳ Processing...")
         
         # Step 1: Classify
-        classifications = client.classify(query)
+        classifications = []
         
         # Step 2: Search vector store
         search_results = []
         if vector_store:
-            search_results = vector_store.search(query, k=5)
+            search_results = vector_store.search(query, k=15)
         
         # ─── Display Classification Results ───
         print("\n" + "=" * 50)
