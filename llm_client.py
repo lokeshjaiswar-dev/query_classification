@@ -1,8 +1,3 @@
-# ============================================
-# FILE: llm_client.py
-# PURPOSE: Simple LLM Client
-# ============================================
-
 import json
 import requests
 from typing import Dict, List
@@ -64,7 +59,6 @@ class LLMClient:
                 print(f"Response: {response.text}")
                 return self._default_classification(query)
             
-            # ─── Parse response ───
             data = response.json()
             content = data["choices"][0]["message"]["content"]
 
