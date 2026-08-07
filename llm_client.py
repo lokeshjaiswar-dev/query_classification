@@ -75,7 +75,6 @@ class LLMClient:
 
             content = content.strip()
             
-            # Remove markdown code blocks
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0]
             elif "```" in content:
