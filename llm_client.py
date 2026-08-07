@@ -27,7 +27,7 @@ class LLMClient:
             raise ValueError("System prompt not set!")
         
         try:
-            # ─── Build request ───
+            
             messages = [
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": f'Classify this query: "{query}"'}
@@ -45,7 +45,7 @@ class LLMClient:
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {self.api_key}"
             }
-            
+
             response = requests.post(
                 self.endpoint,
                 headers=headers,
