@@ -87,7 +87,6 @@ class LLMClient:
             elif isinstance(result, dict) and "queries" in result:
                 queries = result["queries"]
             else:
-                # Single classification
                 queries = [result]
             
             # Ensure each has required fields
