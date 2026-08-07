@@ -82,7 +82,6 @@ class LLMClient:
             
             result = json.loads(content)
             
-            # Handle different response formats
             if isinstance(result, list):
                 queries = result
             elif isinstance(result, dict) and "queries" in result:
