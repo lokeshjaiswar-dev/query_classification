@@ -80,7 +80,6 @@ class LLMClient:
             elif "```" in content:
                 content = content.split("```")[1].split("```")[0]
             
-            # Parse JSON
             result = json.loads(content)
             
             # Handle different response formats
