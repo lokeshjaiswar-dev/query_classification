@@ -22,6 +22,7 @@ def initialize_vector_store():
         print(f"   ⚠️ Vector search will be disabled.")
         return None
 
+
     chunks = load_chunks()
     
     if not chunks:
