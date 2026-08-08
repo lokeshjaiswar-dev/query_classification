@@ -1,6 +1,6 @@
 # ============================================
-# FILE: ingest.py
-# PURPOSE: Load PDF documents from nested employee folders
+# FILE: ingest.py (UPDATED - Dynamic Metadata Only)
+# PURPOSE: Load PDF documents with dynamic metadata in text
 # ============================================
 
 from __future__ import annotations
@@ -14,19 +14,19 @@ import os
 
 from config import DATA_DIR
 
-CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "800"))
-CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "120"))
+CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "1500"))
+CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "250"))
 
 
 @dataclass
 class Chunk:
     """A single piece of retrievable text plus its provenance."""
     text: str
-    source: str          # Relative path like "EMP001_Advik_Maharaj/resume.pdf"
-    type: str            # "pdf"
-    employee_id: str     # "EMP001"
-    employee_name: str   # "Advik_Maharaj"
-    filename: str        # "resume.pdf"
+    source: str
+    type: str
+    employee_id: str
+    employee_name: str
+    filename: str
     meta: dict = field(default_factory=dict)
 
 
@@ -47,12 +47,9 @@ def _split(text: str, size: int, overlap: int) -> list[str]:
 
 
 def _extract_employee_info(path: Path) -> tuple[str, str]:
-    """
-    Extract employee ID and name from folder name.
-    Example: "EMP001_Advik_Maharaj" → ("EMP001", "Advik_Maharaj")
-    """
+    """Extract employee ID and name from folder name."""
     folder_name = path.name
-    parts = folder_name.split("_", 1)  # Split on first underscore only
+    parts = folder_name.split("_", 1)
     if len(parts) == 2 and parts[0].startswith("EMP"):
         return parts[0], parts[1]
     return "", ""
@@ -72,13 +69,10 @@ def load_chunks(data_dir: Path | str | None = None) -> list[Chunk]:
         return []
     
     chunks: list[Chunk] = []
-    
-    # Find all employee folders (any folder starting with "EMP")
     employee_folders = [f for f in data_dir.iterdir() if f.is_dir() and f.name.startswith("EMP")]
     
     if not employee_folders:
         print(f"[ingest] ⚠️ No employee folders found in {data_dir}")
-        print(f"[ingest] 💡 Expected structure: employees/EMP001_Name/ *.pdf")
         return []
     
     print(f"[ingest] 📁 Found {len(employee_folders)} employee folders")
@@ -92,7 +86,6 @@ def load_chunks(data_dir: Path | str | None = None) -> list[Chunk]:
             print(f"[ingest] ⚠️ Skipping invalid folder: {emp_folder.name}")
             continue
         
-        # Find all PDFs in this employee folder
         pdf_files = list(emp_folder.glob("*.pdf"))
         
         if not pdf_files:
@@ -117,11 +110,34 @@ def load_chunks(data_dir: Path | str | None = None) -> list[Chunk]:
 
             rel = pdf_path.relative_to(data_dir).as_posix()
             
-            # Split into chunks
+            # ─── KEY CHANGE: Split and create enriched text ───
             for piece in _split(raw, CHUNK_SIZE, CHUNK_OVERLAP):
+                # ─── DYNAMIC METADATA: Build from available data ───
+                
+                # 1. Employee info (dynamically extracted from folder)
+                employee_info = f"Employee: {emp_name} (ID: {emp_id})"
+                
+                # 2. File info (dynamically from PDF)
+                file_info = f"Document: {pdf_path.name}"
+                
+                # 3. Document type (dynamically from filename)
+                # Remove extension, replace underscores with spaces, title case
+                doc_type = pdf_path.stem.replace("_", " ").title()
+                doc_info = f"Type: {doc_type}"
+                
+                # ─── Combine everything dynamically ───
+                # No hardcoded values - everything comes from the actual file/folder
+                enriched_text = f"""
+{employee_info}
+{file_info}
+{doc_info}
+
+{piece}
+"""
+                
                 chunks.append(
                     Chunk(
-                        text=piece,
+                        text=enriched_text,  # ← Now includes dynamic metadata!
                         source=rel,
                         type="pdf",
                         employee_id=emp_id,
