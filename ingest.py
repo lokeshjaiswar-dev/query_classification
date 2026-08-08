@@ -152,4 +152,5 @@ def load_chunks(data_dir: Path | str | None = None) -> list[Chunk]:
                 )
     
     print(f"[ingest] ✅ Loaded {len(chunks)} chunks from {total_pdfs} PDFs across {len(employee_folders)} employees")
+    
     return chunks
