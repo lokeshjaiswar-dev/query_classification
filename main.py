@@ -23,6 +23,8 @@ def initialize_vector_store():
         return None
 
 
+
+
     chunks = load_chunks()
     
     if not chunks:
