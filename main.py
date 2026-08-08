@@ -21,6 +21,7 @@ def initialize_vector_store():
         print(f"   ⚠️ Data directory not found: {DATA_DIR}")
         print(f"   ⚠️ Vector search will be disabled.")
         return None
+        
     
     # Load chunks from PDFs
     chunks = load_chunks()
