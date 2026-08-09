@@ -27,6 +27,8 @@ def initialize_vector_store():
 
 
 
+
+     
         
     chunks = load_chunks()
     
