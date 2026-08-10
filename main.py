@@ -1,6 +1,6 @@
 # ============================================
 # FILE: main.py
-# PURPOSE: Query Classifier + PDF Vector Search
+# PURPOSE: Query Classifier + PDF Vector Search + AI Answers
 # ============================================
 
 import json
@@ -21,7 +21,7 @@ def initialize_vector_store():
         print(f"   ⚠️ Data directory not found: {DATA_DIR}")
         print(f"   ⚠️ Vector search will be disabled.")
         return None
-        
+    
     chunks = load_chunks()
     
     if not chunks:
@@ -35,8 +35,10 @@ def initialize_vector_store():
     # Show employee information
     employees = vector_store.get_employees()
     print(f"\n   👥 Employees loaded:")
-    for emp_id, emp_name in employees:
+    for emp_id, emp_name in employees[:10]:  # Show first 10
         print(f"      - {emp_id}: {emp_name}")
+    if len(employees) > 10:
+        print(f"      ... and {len(employees) - 10} more")
     
     print(f"   ✅ Vector store built with {vector_store.size} vectors")
     
@@ -44,9 +46,9 @@ def initialize_vector_store():
 
 
 def main():
-    """Interactive query classification with vector search."""
+    """Interactive query classification with vector search and AI answers."""
     print("=" * 60)
-    print("QUERY CLASSIFIER + PDF VECTOR SEARCH")
+    print("QUERY CLASSIFIER + PDF VECTOR SEARCH + AI ANSWERS")
     print("=" * 60)
     
     # ─── Initialize Classifier ───
@@ -73,18 +75,18 @@ def main():
         client.set_vector_store(vector_store)
     
     print("\n" + "=" * 60)
-    print("✅ READY! Enter your queries below.")
+    print("✅ READY! Ask any question about your documents.")
     print("Type 'exit' or 'quit' to stop.")
     print("\n💡 Examples:")
-    print("   - 'find resume of Advik'")
-    print("   - 'show me documents for EMP001'")
-    print("   - 'find increment letters'")
-    print("   - 'search offer letters'")
+    print("   - 'when was Maya offered a job?'")
+    print("   - 'show me increment letters for Advik'")
+    print("   - 'what is the salary of Maya?'")
+    print("   - 'find documents for EMP001'")
     print("=" * 60)
     
     # ─── Interactive loop ───
     while True:
-        query = input("\n🔍 Enter query (or 'exit'): ").strip()
+        query = input("\n🔍 Ask a question (or 'exit'): ").strip()
         
         if query.lower() in ["exit", "quit", "q"]:
             print("\n👋 Goodbye!")
@@ -93,53 +95,61 @@ def main():
         if not query:
             continue
         
-        # ─── Classify and Search ───
-        print("\n⏳ Processing...")
+        print("\n⏳ Searching and generating answer...")
         
-        # Step 1: Classify
-        classifications = []
+        # ─── Step 1: Classify (optional - uncomment if needed) ───
+        # classifications = client.classify(query)
         
-        # Step 2: Search vector store
-        search_results = []
+        # ─── Step 2: Search and Generate Answer ───
         if vector_store:
-            search_results = vector_store.search(query, k=7)
+            result = client.answer_question(query, k=5)
+            
+            # ─── Display Answer ───
+            print("\n" + "=" * 60)
+            print("📝 ANSWER")
+            print("=" * 60)
+            print(f"\n{result['answer']}")
+            
+            # ─── Display Sources ───
+            if result.get('sources'):
+                print("\n" + "-" * 60)
+                print("📄 SOURCES")
+                print("-" * 60)
+                for i, source in enumerate(result['sources'], 1):
+                    print(f"\n  [{i}] {source.get('filename', 'Unknown')}")
+                    print(f"      Employee: {source.get('employee', 'N/A')}")
+                    print(f"      Score: {source.get('score', 0):.4f}")
+            
+            # ─── Optional: Show raw search results ───
+            if result.get('chunks'):
+                print("\n" + "-" * 60)
+                print("🔍 RAW SEARCH RESULTS (for debugging)")
+                print("-" * 60)
+                for i, (chunk, score) in enumerate(result['chunks'][:3], 1):
+                    print(f"\n  [{i}] Score: {score:.4f}")
+                    print(f"      File: {chunk.filename}")
+                    preview = chunk.text[:150].replace('\n', ' ')
+                    print(f"      Preview: {preview}...")
         
-        # ─── Display Classification Results ───
-        print("\n" + "=" * 50)
-        if len(classifications) == 1:
-            print("CLASSIFICATION RESULT")
         else:
-            print(f"COMPOSITE QUERY - {len(classifications)} PARTS")
-        print("=" * 50)
-        
-        for i, result in enumerate(classifications, 1):
-            if len(classifications) > 1:
-                print(f"\n📌 Part {i}:")
+            # Fallback: Only search results (no LLM)
+            search_results = vector_store.search(query, k=7) if vector_store else []
+            
+            if search_results:
+                print("\n" + "-" * 50)
+                print("PDF SEARCH RESULTS")
+                print("-" * 50)
+                
+                for i, (chunk, score) in enumerate(search_results, 1):
+                    print(f"\n  [{i}] Score: {score:.4f}")
+                    print(f"      Employee: {chunk.employee_id} - {chunk.employee_name}")
+                    print(f"      File: {chunk.filename}")
+                    preview = chunk.text[:200].replace('\n', ' ')
+                    print(f"      Preview: {preview}...")
             else:
-                print()
-            
-            print(f"  Query:           {result.get('text', query)}")
-            print(f"  Intent:          {result.get('intent', 'N/A')}")
-            print(f"  Spec Category:   {result.get('spec_category', 'N/A')}")
-            print(f"  Route:           {result.get('route', 'N/A')}")
-            print(f"  ES Index:        {result.get('es_index', 'N/A')}")
-            print(f"  Search Strategy: {result.get('search_strategy', 'N/A')}")
+                print("\n❌ No results found.")
         
-        # ─── Display Search Results ───
-        if search_results:
-            print("\n" + "-" * 50)
-            print("PDF SEARCH RESULTS")
-            print("-" * 50)
-            
-            for i, (chunk, score) in enumerate(search_results, 1):
-                print(f"\n  [{i}] Score: {score:.4f}")
-                print(f"      Employee: {chunk.employee_id} - {chunk.employee_name}")
-                print(f"      File: {chunk.filename}")
-                print(f"      Source: {chunk.source}")
-                preview = chunk.text[:200].replace('\n', ' ')
-                print(f"      Preview: {preview}...")
-        
-        print("\n" + "=" * 50)
+        print("\n" + "=" * 60)
 
 
 if __name__ == "__main__":
