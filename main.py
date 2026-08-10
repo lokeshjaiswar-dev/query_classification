@@ -102,7 +102,7 @@ def main():
         
         # ─── Step 2: Search and Generate Answer ───
         if vector_store:
-            result = client.answer_question(query, k=20)
+            result = client.answer_question(query, k=7)
             
             # ─── Display Answer ───
             print("\n" + "=" * 60)
@@ -133,7 +133,7 @@ def main():
         
         else:
             # Fallback: Only search results (no LLM)
-            search_results = vector_store.search(query, k=7) if vector_store else []
+            search_results = vector_store.search(query, k=5) if vector_store else []
             
             if search_results:
                 print("\n" + "-" * 50)
