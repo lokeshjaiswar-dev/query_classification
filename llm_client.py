@@ -1,12 +1,13 @@
 import json
 import requests
 from typing import Dict, List, Optional
-from vector_store import VectorStore
+from es_client import ESClient
+from es_query_builder import ESQueryBuilder
 
 
 class LLMClient:
     """
-    LLM client for query classification with vector search.
+    LLM client for query classification with Elasticsearch.
     """
     
     def __init__(self, model: str, api_key: str, endpoint: str):
@@ -14,15 +15,16 @@ class LLMClient:
         self.api_key = api_key
         self.endpoint = endpoint
         self.system_prompt = None
-        self.vector_store = None
+        self.es_client = None
+        self.query_builder = ESQueryBuilder()
     
     def set_system_prompt(self, prompt: str):
         """Set the system prompt once."""
         self.system_prompt = prompt
     
-    def set_vector_store(self, vector_store: VectorStore):
-        """Set the vector store for semantic search."""
-        self.vector_store = vector_store
+    def set_es_client(self, es_client: ESClient):
+        """Set the Elasticsearch client."""
+        self.es_client = es_client
     
     def classify(self, query: str) -> List[Dict]:
         """Classify a query."""
@@ -68,40 +70,59 @@ class LLMClient:
             print(f"❌ Error: {e}")
             return self._default_classification(query)
     
-    def answer_question(self, query: str, k: int = 20) -> Dict:
+    def answer_question(self, query: str) -> Dict:
         """
-        Search for relevant chunks and generate an answer using LLM.
+        Simple flow: Classify → Build ES Query → Get Documents → LLM Answer
         """
-        if not self.vector_store:
+        # Step 1: Classify
+        classifications = self.classify(query)
+        
+        if not classifications:
             return {
-                "answer": "Vector store not initialized.",
+                "answer": "Failed to classify query.",
                 "sources": []
             }
         
-
-        search_results = self.vector_store.search(query, k=k)
+        classification = classifications[0]
+        print(f"\n📊 Classification: {classification.get('intent')} → {classification.get('spec_category')}")
         
-        if not search_results:
+        # Step 2: Build ES Query
+        if classification.get('intent') == 'search':
+            es_query = self.query_builder.build_search_query(classification, query)
+        else:
+            es_query = {"query": {"match_all": {}}, "size": 0}
+        
+        print(f"🔍 ES Query: {json.dumps(es_query, indent=2)}")
+        
+        # Step 3: Get Documents from ES
+        docs = []
+        if self.es_client:
+            docs = self.es_client.search_documents(es_query)
+        
+        if not docs:
             return {
-                "answer": "I couldn't find any relevant information to answer your question.",
+                "answer": "I couldn't find any relevant documents to answer your question.",
                 "sources": []
             }
         
-        # ─── Step 2: Build context ───
+        print(f"📄 Found {len(docs)} documents")
+        
+        # Step 4: Build context for LLM
         context_parts = []
         sources = []
         
-        for i, (chunk, score) in enumerate(search_results, 1):
-            # Use FULL text, NOT truncated
-            context_parts.append(f"[Document {i}] From: {chunk.filename}\n{chunk.text}")
+        for i, doc in enumerate(docs[:5], 1):
+            context_parts.append(f"[Document {i}] From: {doc.get('file_name', 'Unknown')}\n{doc.get('extracted_text', '')[:1000]}")
             sources.append({
-                "filename": chunk.filename,
-                "employee": chunk.employee_name,
-                "score": score
+                "filename": doc.get('file_name', 'Unknown'),
+                "employee": doc.get('emp_name', 'N/A'),
+                "year": doc.get('year'),
+                "document_type": doc.get('document_type')
             })
         
         context = "\n\n---\n\n".join(context_parts)
         
+        # Step 5: Generate answer with LLM
         system_prompt = """You are a helpful assistant that answers questions based on provided document excerpts.
 
 Instructions:
@@ -109,10 +130,8 @@ Instructions:
 2. If the answer is not in the documents, say "I couldn't find that information."
 3. Be concise, clear, and direct.
 4. Always cite which document(s) you got the information from.
-5. If there are dates, numbers, or specific details, include them exactly as they appear.
-6. Look carefully at ALL the documents provided - the answer might be in any of them."""
-        
-        # ─── Step 4: Generic user prompt ───
+5. If there are dates, numbers, or specific details, include them exactly as they appear."""
+
         answer_prompt = f"""
 Answer the following question based ONLY on the provided document excerpts.
 
@@ -129,8 +148,7 @@ Rules:
 
 Answer:
 """
-        
-        # ─── Step 5: Send to LLM ───
+
         try:
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -158,7 +176,6 @@ Answer:
             )
             
             if response.status_code != 200:
-                print(f"❌ Answer API Error: {response.status_code}")
                 return {
                     "answer": "Sorry, I couldn't generate an answer at this time.",
                     "sources": sources
@@ -169,7 +186,9 @@ Answer:
             
             return {
                 "answer": answer,
-                "sources": sources
+                "sources": sources,
+                "classification": classification,
+                "es_query": es_query
             }
             
         except Exception as e:
