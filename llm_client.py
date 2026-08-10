@@ -1,8 +1,3 @@
-# ============================================
-# FILE: llm_client.py
-# PURPOSE: LLM Client with Generic Prompts
-# ============================================
-
 import json
 import requests
 from typing import Dict, List, Optional
@@ -73,7 +68,7 @@ class LLMClient:
             print(f"❌ Error: {e}")
             return self._default_classification(query)
     
-    def answer_question(self, query: str, k: int = 5) -> Dict:
+    def answer_question(self, query: str, k: int = 20) -> Dict:
         """
         Search for relevant chunks and generate an answer using LLM.
         """
@@ -83,7 +78,7 @@ class LLMClient:
                 "sources": []
             }
         
-        # ─── Step 1: Search ───
+
         search_results = self.vector_store.search(query, k=k)
         
         if not search_results:
@@ -107,7 +102,6 @@ class LLMClient:
         
         context = "\n\n---\n\n".join(context_parts)
         
-        # ─── Step 3: Generic system prompt ───
         system_prompt = """You are a helpful assistant that answers questions based on provided document excerpts.
 
 Instructions:

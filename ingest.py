@@ -1,8 +1,3 @@
-# ============================================
-# FILE: ingest.py (UPDATED - Dynamic Metadata Only)
-# PURPOSE: Load PDF documents with dynamic metadata in text
-# ============================================
-
 from __future__ import annotations
 
 import re

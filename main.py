@@ -102,7 +102,7 @@ def main():
         
         # ─── Step 2: Search and Generate Answer ───
         if vector_store:
-            result = client.answer_question(query, k=5)
+            result = client.answer_question(query, k=20)
             
             # ─── Display Answer ───
             print("\n" + "=" * 60)
