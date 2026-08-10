@@ -50,6 +50,7 @@ def _extract_employee_info(path: Path) -> tuple[str, str]:
     return "", ""
 
 
+
 def load_chunks(data_dir: Path | str | None = None) -> list[Chunk]:
     """Load all PDF chunks from nested employee folders."""
     if data_dir is None:
