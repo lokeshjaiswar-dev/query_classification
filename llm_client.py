@@ -7,6 +7,8 @@ from es_query_builder import ESQueryBuilder
 
 
 
+
+
 class LLMClient:
     """
     LLM client for query classification with Elasticsearch.
