@@ -63,6 +63,7 @@ class LLMClient:
             
             data = response.json()
             content = data["choices"][0]["message"]["content"]
+            print(f"\n🤖 LLM Response:\n{content}\n")
             
             return self._parse_response(content, query)
             
@@ -183,6 +184,7 @@ Answer:
             
             data = response.json()
             answer = data["choices"][0]["message"]["content"].strip()
+            print(f"\n🤖 LLM Answer:\n{answer}\n")
             
             return {
                 "answer": answer,
