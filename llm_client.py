@@ -83,25 +83,6 @@ class LLMClient:
                 "sources": []
             }
         
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         classification = classifications[0]
         print(f"\n📊 Classification: {classification.get('intent')} → {classification.get('spec_category')}")
         
