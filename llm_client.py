@@ -93,6 +93,8 @@ class LLMClient:
             es_query = {"query": {"match_all": {}}, "size": 0}
         
 
+
+
         
         print(f"🔍 ES Query: {json.dumps(es_query, indent=2)}")
         
