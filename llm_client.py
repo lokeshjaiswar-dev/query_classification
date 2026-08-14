@@ -108,6 +108,9 @@ class LLMClient:
 
 
 
+
+
+
         print(f"🔍 ES Query: {json.dumps(es_query, indent=2)}")
         
         # Step 3: Get Documents from ES
