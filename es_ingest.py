@@ -114,7 +114,7 @@ class ESIngestor:
         
         return metadata
 
-
+# why commits not ocming 
 
     def extract_text_from_pdf(self, pdf_path: Path) -> str:
         """Extract text from PDF"""
