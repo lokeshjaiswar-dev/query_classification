@@ -233,6 +233,9 @@ Answer:
             print(f"❌ Parse error: {e}")
             return self._default_classification(original_query)
     
+    def create_something():
+        pass
+
     def _default_classification(self, query: str) -> List[Dict]:
         """Default classification when everything fails."""
         return [{
