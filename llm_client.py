@@ -238,6 +238,15 @@ Answer:
 
         list = []
 
+        for i in range(5):
+            list.append({
+                "text": f"Sample query {i+1}",
+                "intent": "search",
+                "spec_category": "File Retrieval",
+                "route": "Elasticsearch search",
+                "es_index": None,
+                "search_strategy": "BFS"
+            })
         return list
 
     def _default_classification(self, query: str) -> List[Dict]:
