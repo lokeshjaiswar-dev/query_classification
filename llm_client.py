@@ -227,6 +227,8 @@ Answer:
 
 
 
+
+
             for q in queries:
                 if "text" not in q:
                     q["text"] = original_query
