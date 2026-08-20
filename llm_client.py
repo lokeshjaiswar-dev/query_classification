@@ -236,6 +236,8 @@ Answer:
     def create_something():
         pass
 
+        list = []
+
     def _default_classification(self, query: str) -> List[Dict]:
         """Default classification when everything fails."""
         return [{
