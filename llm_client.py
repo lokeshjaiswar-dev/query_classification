@@ -233,22 +233,6 @@ Answer:
             print(f"❌ Parse error: {e}")
             return self._default_classification(original_query)
     
-    def create_something():
-        pass
-
-        list = []
-
-        for i in range(5):
-            list.append({
-                "text": f"Sample query {i+1}",
-                "intent": "search",
-                "spec_category": "File Retrieval",
-                "route": "Elasticsearch search",
-                "es_index": None,
-                "search_strategy": "BFS"
-            })
-        return list
-
     def _default_classification(self, query: str) -> List[Dict]:
         """Default classification when everything fails."""
         return [{
