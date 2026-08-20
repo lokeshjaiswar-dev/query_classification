@@ -114,6 +114,8 @@ class ESIngestor:
         
         return metadata
 
+
+
     def extract_text_from_pdf(self, pdf_path: Path) -> str:
         """Extract text from PDF"""
         try:
