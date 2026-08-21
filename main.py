@@ -67,12 +67,6 @@ def main():
         if not query:
             continue
         
-        print("\n⏳ Processing...")
-        
-
-
-
-
         # ─── Classify + Search + Generate Answer ───
         result = client.answer_question(query)
 
