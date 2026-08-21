@@ -71,8 +71,6 @@ def main():
         
         # ─── Classify + Search + Generate Answer ───
         result = client.answer_question(query)
-        classification = result.get('classification', {})
-
 
         # ─── Display Answer ───
         print("\n" + "=" * 60)
