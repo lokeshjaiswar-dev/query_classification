@@ -46,15 +46,7 @@ def main():
     if es_client:
         client.set_es_client(es_client)
     
-    print("\n" + "=" * 60)
-    print("✅ READY! Ask any question about your documents.")
-    print("Type 'exit' or 'quit' to stop.")
-    print("\n💡 Examples:")
-    print("   - 'what was Ranbir's salary after his first increment?'")
-    print("   - 'show me increment letters for Advik'")
-    print("   - 'what is the salary of Maya?'")
-    print("   - 'find documents for EMP001'")
-    print("=" * 60)
+
     
     # ─── Interactive loop ───
     while True:
